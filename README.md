@@ -46,7 +46,7 @@ uv sync --extra cu121
 ## 使用方法
 
 ### 数据集
-从 [下载链接](https://huggingface.co/datasets/tatsu-lab/alpaca) 下载需要的数据文件（创建./dataset目录）并放到./dataset下
+从 [下载链接](https://www.modelscope.cn/datasets/gongjy/minimind_dataset/files) 下载需要的数据文件（创建./dataset目录）并放到./dataset下
 
 ### 基本使用
 
