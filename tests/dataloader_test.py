@@ -1,9 +1,3 @@
-import os
-import sys
-
-__package__ = "trainer"
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 from trainer.train_utils import create_dataloader
 from dataset.llm_dataset import PretrainedDataset
 from transformers import AutoTokenizer
