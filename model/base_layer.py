@@ -7,6 +7,7 @@
 
 import torch
 import torch.nn as nn
+import math
 
 # embedding层+绝对位置编码层
 class InputEmbeddingLayer(nn.Module):
@@ -60,3 +61,59 @@ class InputEmbeddingLayer(nn.Module):
         output = self.embedding(input_ids) \
             + self.position_embedding(torch.arange(0, input_ids.size(1)))
         return output
+
+class MultiHeadAttention(nn.Module):
+    """
+    多头注意力机制层。
+    """
+    def __init__(self, input_size, hidden_size, context_length, 
+            bias=False, dropout=0.1):
+        super(MultiHeadAttention, self).__init__()
+        # 自注意力层参数构建
+        self.W_k = nn.Linear(input_size, hidden_size, bias=bias)
+        self.W_q = nn.Linear(input_size, hidden_size, bias=bias)
+        self.W_v = nn.Linear(input_size, hidden_size, bias=bias)
+
+        # 进行掩码处理
+        self.register_buffer(
+            "mask", 
+            torch.triu(torch.ones(context_length, context_length), diagonal=1)
+        )
+
+        # dropout层
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        batch_size, seq_len, input_size = x.shape
+
+        keys = self.W_k(x)
+        querys = self.W_q(x)
+        values = self.W_v(x)
+        
+        # 计算注意力分数
+        attention_scores = querys @ keys.transpose(-2, -1)
+
+        # 增加掩码（就地执行，不占用内存）
+        attention_scores.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf)
+
+        ## 针对对嵌入维度进行归一化，避免梯度过小
+        attention_scores /= math.sqrt(keys.shape[-1])
+
+        # 计算注意力权重，使用softmax
+        attention_weights = torch.softmax(attention_scores, dim=-1)
+
+        # dropout化注意力权重
+        attention_weights = self.dropout(attention_weights)
+
+        # 计算上下文向量
+        context_vector = attention_weights @ values
+
+        return context_vector
+
+if __name__ == "__main__":
+    batch_size, seq_len, input_size, hidden_size = 2, 6, 6, 2
+
+    attention_layer = MultiHeadAttention(input_size, hidden_size, seq_len, dropout=0.5)
+    input_tensor = torch.randn(batch_size, seq_len, input_size)
+    output = attention_layer(input_tensor)
+    print(output.shape)
