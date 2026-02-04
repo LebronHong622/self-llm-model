@@ -2,7 +2,7 @@
 @Author: Lebron Hong
 @Date: 2026-01-29
 @LastEditTime: 2026-01-29
-@Description: 大模型基础的一些层设置
+@Description: 大模型基础的一些基础层设置
 """
 
 import torch
@@ -64,17 +64,51 @@ class InputEmbeddingLayer(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """
-    多头注意力机制层。
+    多头自注意力机制层 (Multi-Head Self-Attention)。
+    
+    这是 Transformer 架构的核心组件，通过并行计算多组注意力头来捕获输入序列中
+    不同子空间的信息。每个注意力头独立学习不同的注意力模式，最终合并所有头的输出。
+    
+    Args:
+        input_size (int): 输入特征的维度大小。
+        hidden_size (int): 隐藏层维度，也是 Q/K/V 投影后的维度。
+        num_heads (int): 注意力头的数量，hidden_size 必须能被其整除。
+        context_length (int): 支持的最大序列长度。
+        bias (bool, optional): 线性层是否使用偏置项，默认为 False。
+        dropout (float, optional): Dropout 概率，默认为 0.1。
+    
+    Example:
+        >>> batch_size, seq_len, input_size, hidden_size = 2, 10, 512, 512
+        >>> num_heads, context_length = 8, 512
+        >>> mha = MultiHeadAttention(input_size, hidden_size, num_heads, context_length)
+        >>> x = torch.randn(batch_size, seq_len, input_size)
+        >>> output = mha(x)
+        >>> print(output.shape)  # torch.Size([2, 10, 512])
+    
+    Reference:
+        "Attention Is All You Need" - Vaswani et al., 2017
+        https://arxiv.org/abs/1706.03762
     """
-    def __init__(self, input_size, hidden_size, context_length, 
+    def __init__(self, input_size, hidden_size, num_heads, context_length, 
             bias=False, dropout=0.1):
         super(MultiHeadAttention, self).__init__()
+        self.num_heads = num_heads
+        self.hidden_size = hidden_size
+        self.context_length = context_length
+        self.heads_size = hidden_size // num_heads
+
         # 自注意力层参数构建
         self.W_k = nn.Linear(input_size, hidden_size, bias=bias)
         self.W_q = nn.Linear(input_size, hidden_size, bias=bias)
         self.W_v = nn.Linear(input_size, hidden_size, bias=bias)
 
-        # 进行掩码处理
+        # 输出层参数构建
+        self.W_o = nn.Linear(hidden_size, hidden_size, bias=bias)
+
+        # 进行掩码处理，使用register_buffer来注册一个缓冲区，
+        # 该缓冲区将被保存到磁盘，并在模型保存和加载时被序列化和反序列化。
+        # 掩码矩阵，用于避免自注意力中的自注意力
+        # 上对角为1，其余为0，用于避免自注意力中的自注意力
         self.register_buffer(
             "mask", 
             torch.triu(torch.ones(context_length, context_length), diagonal=1)
@@ -84,19 +118,54 @@ class MultiHeadAttention(nn.Module):
         self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
+        """
+        前向传播计算多头自注意力。
+        
+        执行完整的自注意力计算流程：投影 → 分头 → 注意力计算 → 掩码 → 
+        Softmax → Dropout → 加权求和 → 合并头 → 输出投影。
+        
+        Args:
+            x (torch.Tensor): 输入张量，形状为 (batch_size, seq_len, input_size)。
+                            batch_size: 批次大小
+                            seq_len: 序列长度（必须 <= context_length）
+                            input_size: 输入特征维度
+        
+        Returns:
+            torch.Tensor: 注意力层的输出，形状为 (batch_size, seq_len, hidden_size)。
+                         输出与输入的 batch_size 和 seq_len 保持一致。
+        
+        Raises:
+            IndexError: 如果 seq_len 超过预定义的 context_length。
+            RuntimeError: 如果输入维度不匹配。
+        
+        Note:
+            当前实现使用就地操作 (masked_fill_) 来节省内存。
+            缩放因子 sqrt(d_k) 用于防止点积过大导致 Softmax 梯度消失。
+        """
         batch_size, seq_len, input_size = x.shape
 
         keys = self.W_k(x)
         querys = self.W_q(x)
         values = self.W_v(x)
+
+        # 将输入张量分成num_heads份，并reshape为(batch_size, seq_len, num_heads, head_size)
+        keys = keys.view(batch_size, seq_len, self.num_heads, self.heads_size)
+        querys = querys.view(batch_size, seq_len, self.num_heads, self.heads_size)
+        values = values.view(batch_size, seq_len, self.num_heads, self.heads_size)
+
+        # 将num_heads维度移到第2维，即(batch_size, num_heads, seq_len, head_size)
+        keys = keys.transpose(1, 2)
+        querys = querys.transpose(1, 2)
+        values = values.transpose(1, 2)
         
         # 计算注意力分数
         attention_scores = querys @ keys.transpose(-2, -1)
 
         # 增加掩码（就地执行，不占用内存）
-        attention_scores.masked_fill_(self.mask.bool()[:seq_len, :seq_len], -torch.inf)
+        mask_bool = self.mask.bool()[:seq_len, :seq_len]
+        attention_scores.masked_fill_(mask_bool, -torch.inf)
 
-        ## 针对对嵌入维度进行归一化，避免梯度过小
+        # 针对对嵌入维度进行归一化，避免梯度过小
         attention_scores /= math.sqrt(keys.shape[-1])
 
         # 计算注意力权重，使用softmax
@@ -105,15 +174,13 @@ class MultiHeadAttention(nn.Module):
         # dropout化注意力权重
         attention_weights = self.dropout(attention_weights)
 
-        # 计算上下文向量
-        context_vector = attention_weights @ values
+        # 计算上下文向量，并转置回(batch_size, seq_len, num_heads, head_size)
+        context_vector = (attention_weights @ values).transpose(1, 2)
 
-        return context_vector
+        # 将num_heads维度移到第3维，即(batch_size, seq_len, hidden_size)
+        context_vector = context_vector.reshape(batch_size, seq_len, self.hidden_size)
 
-if __name__ == "__main__":
-    batch_size, seq_len, input_size, hidden_size = 2, 6, 6, 2
+        # 输出层
+        output = self.W_o(context_vector)
 
-    attention_layer = MultiHeadAttention(input_size, hidden_size, seq_len, dropout=0.5)
-    input_tensor = torch.randn(batch_size, seq_len, input_size)
-    output = attention_layer(input_tensor)
-    print(output.shape)
+        return output
