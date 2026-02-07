@@ -8,6 +8,7 @@
 import torch
 import torch.nn as nn
 import math
+from config.config import ModelConfig
 
 # embedding层+绝对位置编码层
 class InputEmbeddingLayer(nn.Module):
@@ -184,3 +185,77 @@ class MultiHeadAttention(nn.Module):
         output = self.W_o(context_vector)
 
         return output
+
+class TransformerBlock(nn.Module):
+    """
+    Transformer 块，包含一个多头自注意力层和一个前馈神经网络层。
+    
+    Args:
+        input_size (int): 输入特征的维度大小。
+        hidden_size (int): 隐藏层维度，也是 Q/K/V 投影后的维度。
+        num_heads (int): 注意力头的数量，hidden_size 必须能被其整除。
+        context_length (int): 支持的最大序列长度。
+        dropout (float, optional): Dropout 概率，默认为 0.1。
+    
+    Example:
+        >>> batch_size, seq_len, input_size, hidden_size = 2, 10, 512, 512
+        >>> num_heads, context_length = 8, 512
+        >>> block = TransformerBlock(input_size, hidden_size, num_heads, context_length)
+        >>> x = torch.randn(batch_size, seq_len, input
+    """
+    
+    def __init__(self, config: ModelConfig):
+        super(TransformerBlock, self).__init__()
+    
+    def forward(self, x):
+        """
+        前向传播计算 Transformer 块。
+        
+        执行完整的 Transformer 块计算流程：
+        注意力 → 层归一化 → Dropout → 前馈神经网络 → 层归一化 → Dropout → 输出。
+        
+        Args:
+            x (torch.Tensor): 输入
+        """
+        pass
+
+class NormLayer(nn.Module):
+    """
+    层归一化层 (Layer Normalization)。
+    
+    层归一化通过对每个样本的特征进行归一化，使其具有零均值和单位方差。
+    它在 Transformer 中被广泛使用，以提高模型的性能和稳定性。
+    
+    Args:
+        input_size (int): 输入特征的维度大小。
+        eps (float, optional): 防止除零错误的极小值，默认为 1e-6。
+    
+    Example:
+        >>> batch_size, seq_len, input_size = 2, 10, 512
+        >>> norm = NormLayer(input_size)
+        >>> x = torch.randn(batch_size, seq_len, input_size)
+        >>> output = norm(x)
+        >>> print(output.shape)  # torch.Size([2, 10, 512])
+    """
+    
+    def __init__(self):
+        super(NormLayer, self).__init__()
+    
+    def forward(self, x):
+        """
+        前向传播计算层归一化。
+        
+        执行完整的层归一化计算流程：
+        计算均值和方差 → 归一化 → 缩放和偏移。
+        
+        Args:
+            x (torch.Tensor): 输入张量，形状为 (batch_size, seq_len, input_size)。
+                            batch_size: 批次大小
+                            seq_len: 序列长度
+                            input_size: 输入特征维度
+        
+        Returns:
+            torch.Tensor: 层归一化后的张量，形状为 (batch_size, seq_len, input_size)。
+                         输出与输入的 batch_size 和 seq_len
+        """
+        pass

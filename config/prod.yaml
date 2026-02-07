@@ -1,0 +1,16 @@
+# config/prod.yaml - 生产环境配置
+model:
+  hidden_size: 1024       # 生产环境大模型
+  num_layers: 24
+  num_heads: 16
+  max_length: 2048
+
+training:
+  batch_size: 64          # 大批次
+  num_epochs: 100
+  device: "cuda"
+  save_interval: 5000
+  log_interval: 500
+
+logging:
+  level: "WARNING"        # 生产环境减少日志

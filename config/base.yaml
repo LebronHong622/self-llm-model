@@ -1,0 +1,26 @@
+# config/base.yaml - 通用基础配置
+model:
+  vocab_size: 10000
+  hidden_size: 768
+  num_layers: 12
+  num_heads: 12
+  max_length: 512
+  dropout: 0.1
+
+training:
+  batch_size: 32
+  learning_rate: 0.0001
+  num_epochs: 10
+  num_workers: 4
+  device: "cuda"
+  save_interval: 1000
+  log_interval: 100
+
+data:
+  dataset_path: "dataset/pretrain_hq.jsonl"
+  tokenizer_path: "tokenizer"
+  max_seq_length: 512
+
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
