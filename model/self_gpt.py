@@ -21,7 +21,7 @@ class SelfGPTModel(nn.Module):
         self.transformers = nn.Sequential(*[TransformerBlock(config) for _ in range(config.num_layers)])
 
         # 归一化层
-        self.norm_layer = NormLayer(config.hidden_size)
+        self.norm_layer = nn.LayerNorm(config.hidden_size)
 
         # 输出层
         self.output_layer = nn.Linear(config.hidden_size, config.vocab_size, bias=False)
