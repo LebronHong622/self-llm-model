@@ -217,7 +217,7 @@ class TransformerBlock(nn.Module):
         Args:
             x (torch.Tensor): 输入
         """
-        pass
+        return x
 
 class NormLayer(nn.Module):
     """
@@ -227,19 +227,23 @@ class NormLayer(nn.Module):
     它在 Transformer 中被广泛使用，以提高模型的性能和稳定性。
     
     Args:
-        input_size (int): 输入特征的维度大小。
+        emb_size (int): 输入特征的维度大小。
         eps (float, optional): 防止除零错误的极小值，默认为 1e-6。
     
     Example:
-        >>> batch_size, seq_len, input_size = 2, 10, 512
-        >>> norm = NormLayer(input_size)
-        >>> x = torch.randn(batch_size, seq_len, input_size)
+        >>> batch_size, seq_len, emb_size = 2, 10, 512
+        >>> norm = NormLayer(emb_size)
+        >>> x = torch.randn(batch_size, seq_len, emb_size)
         >>> output = norm(x)
         >>> print(output.shape)  # torch.Size([2, 10, 512])
     """
     
-    def __init__(self):
+    def __init__(self, emb_size: int, eps: float = 1e-5):
         super(NormLayer, self).__init__()
+        self.eps = eps
+        # 可学习参数，用于缩放和偏移
+        self.gamma = nn.Parameter(torch.ones(emb_size))
+        self.beta = nn.Parameter(torch.zeros(emb_size))
     
     def forward(self, x):
         """
@@ -258,4 +262,7 @@ class NormLayer(nn.Module):
             torch.Tensor: 层归一化后的张量，形状为 (batch_size, seq_len, input_size)。
                          输出与输入的 batch_size 和 seq_len
         """
-        pass
+        mean = x.mean(dim=-1, keepdim=True)
+        std = x.std(dim=-1, keepdim=True, unbiased=False)
+        norm_x = (x - mean) / (std + self.eps)
+        return self.gamma * norm_x + self.beta
