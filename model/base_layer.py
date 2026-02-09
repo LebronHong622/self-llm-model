@@ -266,3 +266,75 @@ class NormLayer(nn.Module):
         std = x.std(dim=-1, keepdim=True, unbiased=False)
         norm_x = (x - mean) / (std + self.eps)
         return self.gamma * norm_x + self.beta
+
+class GELU(nn.Module):
+    """
+    GELU 激活函数 (Gaussian Error Linear Unit)。
+    
+    GELU 是最近在 Transformer 中被提出的一种激活函数，
+    它通过将输入映射到正态分布来模拟非线性。
+    
+    Example:
+        >>> batch_size, seq_len, emb_size = 2, 10, 512
+        >>> gelu = GELU()
+        >>> x = torch.randn(batch_size, seq_len, emb_size)
+        >>> output = gelu(x)
+        >>> print(output.shape)  # torch.Size([2, 10, 512])
+    """
+    def __init__(self):
+        super(GELU, self).__init__()
+    
+    def forward(self, x):
+        """
+        前向传播计算 GELU。
+        
+        Args:
+            x (torch.Tensor): 输入张量，形状为 (batch_size, seq_len, input_size)。
+                            batch_size: 批次大小
+                            se
+        """
+
+        return 0.5 * x *(1 + torch.tanh(torch.sqrt(torch.tensor(2 / torch.pi)) * (x + 0.044715 * torch.pow(x, 3))))
+
+class FeedForwardLayer(nn.Module):
+    """
+    前馈神经网络层 (Feed Forward Layer)。
+    
+    前馈神经网络层是 Transformer 中常用的结构，
+    它通过两个线性层和一个激活函数来实现非线性变换。
+    
+    Args:
+        emb_size (int): 输入特征的维度大小。
+        expansion_factor (int, optional): 扩展因子，默认为 4。
+    
+    Example:
+        >>> batch_size, seq_len, emb_size = 2, 10, 512
+        >>> ff = FeedForwardLayer(emb_size)
+        >>> x = torch.randn(batch_size, seq_len, emb_size)
+        >>> output = ff(x)
+        >>> print(output.shape)  # torch.Size([2, 10, 512])
+    """
+    
+    def __init__(self, emb_size: int, expansion_factor: int = 4):
+        super(FeedForwardLayer, self).__init__()
+        self.feed_forward_layer = nn.Sequential(
+            nn.Linear(emb_size, expansion_factor * emb_size),
+            nn.GELU(),
+            nn.Linear(expansion_factor * emb_size, emb_size),
+        )
+    
+    def forward(self, x):
+        """
+        前向传播计算前馈神经网络层。
+        
+        Args:
+            x (torch.Tensor): 输入张量，形状为 (batch_size, seq_len, input_size)。
+                            batch_size: 批次大小
+                            seq_len: 序列长度
+                            input_size: 输入特征维度
+        
+        Returns:
+            torch.Tensor: 前馈神经网络层的输出，形状为 (batch_size, seq_len, input_size)。
+                         输出与输入的 batch_size 和 seq_len 保持一致。
+        """
+        return self.feed_forward_layer(x)
