@@ -206,6 +206,24 @@ class TransformerBlock(nn.Module):
     
     def __init__(self, config: ModelConfig):
         super(TransformerBlock, self).__init__()
+        self.layer_norm1 = NormLayer(config.input_size, config.norm_eps)
+
+        self.mha = MultiHeadAttention(
+            config.input_size, 
+            config.hidden_size, 
+            config.num_heads, 
+            config.context_length,
+            config.qwk_bias,
+            config.dropout
+        )
+
+        self.dropout1 = nn.Dropout(config.dropout)
+
+        self.layer_norm2 = NormLayer(config.hidden_size, config.norm_eps)
+
+        self.ffn = FeedForwardLayer(config.hidden_size, config.expansion_factor)
+
+        self.dropout2 = nn.Dropout(config.dropout)
     
     def forward(self, x):
         """
@@ -217,6 +235,17 @@ class TransformerBlock(nn.Module):
         Args:
             x (torch.Tensor): 输入
         """
+        shortcut = x
+        x = self.layer_norm1(x)
+        x = self.mha(x)
+        x = self.dropout1(x)
+        x = x + shortcut
+
+        shortcut = x
+        x = self.layer_norm2(x)
+        x = self.ffn(x)
+        x = self.dropout2(x)
+        x = x + shortcut
         return x
 
 class NormLayer(nn.Module):

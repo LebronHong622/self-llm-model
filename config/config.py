@@ -269,12 +269,16 @@ class ConfigManager:
 class ModelConfig(BaseModel):
     """模型架构配置"""
     vocab_size: int = Field(default=10000, ge=1000, le=1000000, description="词表大小")
+    input_size: int = Field(default=768, ge=64, le=8192, description="输入层大小")
     hidden_size: int = Field(default=768, ge=64, le=8192, description="隐藏层大小")
+    context_length: int = Field(default=1024, ge=16, le=32768, description="上下文长度")
     num_layers: int = Field(default=12, ge=1, le=100, description="层数")
     num_heads: int = Field(default=12, ge=1, le=128, description="注意力头数")
     max_length: int = Field(default=512, ge=16, le=32768, description="最大序列长度")
+    qwk_bias: bool = Field(default=False, description="是否使用偏置")
     dropout: float = Field(default=0.1, ge=0.0, le=1.0, description="Dropout率")
-
+    norm_eps: float = Field(default=1e-5, ge=0.0, le=1.0, description="归一化epsilon")
+    expansion_factor: int = Field(default=4, ge=1, le=100, description="前馈神经网络扩展因子")
 
 class TrainingConfig(BaseModel):
     """训练配置"""
