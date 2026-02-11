@@ -274,7 +274,6 @@ class ModelConfig(BaseModel):
     context_length: int = Field(default=1024, ge=16, le=32768, description="上下文长度")
     num_layers: int = Field(default=12, ge=1, le=100, description="层数")
     num_heads: int = Field(default=12, ge=1, le=128, description="注意力头数")
-    max_length: int = Field(default=512, ge=16, le=32768, description="最大序列长度")
     qwk_bias: bool = Field(default=False, description="是否使用偏置")
     dropout: float = Field(default=0.1, ge=0.0, le=1.0, description="Dropout率")
     norm_eps: float = Field(default=1e-5, ge=0.0, le=1.0, description="归一化epsilon")
@@ -336,11 +335,11 @@ class Config(BaseModel):
                 f"model.num_heads ({model.num_heads}) 整除"
             )
 
-        # max_seq_length 不能超过 max_length
-        if self.data.max_seq_length > model.max_length:
+        # max_seq_length 不能超过 context_length
+        if self.data.max_seq_length > model.context_length:
             raise ValueError(
                 f"data.max_seq_length ({self.data.max_seq_length}) 不能大于 "
-                f"model.max_length ({model.max_length})"
+                f"model.context_length ({model.context_length})"
             )
 
         # 检查数据集文件是否存在

@@ -12,7 +12,7 @@ class SelfGPTModel(nn.Module):
         super().__init__()
         self.config = config
         # 嵌入编码 + 绝对位置编码
-        self.embedding = InputEmbeddingLayer(config.vocab_size, config.hidden_size, config.max_length)
+        self.embedding = InputEmbeddingLayer(config.vocab_size, config.hidden_size, config.context_length)
 
         # dropout层
         self.dropout = nn.Dropout(config.dropout)
@@ -21,7 +21,7 @@ class SelfGPTModel(nn.Module):
         self.transformers = nn.Sequential(*[TransformerBlock(config) for _ in range(config.num_layers)])
 
         # 归一化层
-        self.norm_layer = nn.LayerNorm(config.hidden_size)
+        self.norm_layer = nn.LayerNorm(config.hidden_size, config.norm_eps)
 
         # 输出层
         self.output_layer = nn.Linear(config.hidden_size, config.vocab_size, bias=False)

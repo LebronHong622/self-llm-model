@@ -35,10 +35,10 @@ class InputEmbeddingLayer(nn.Module):
         >>> print(output.shape)  # torch.Size([2, 10, 768])
     """
 
-    def __init__(self, vocab_size, hidden_size, max_length):
+    def __init__(self, vocab_size, hidden_size, context_length):
         super(InputEmbeddingLayer, self).__init__()
         self.embedding = nn.Embedding(vocab_size, hidden_size)
-        self.context_length = max_length
+        self.context_length = context_length
         self.position_embedding = nn.Embedding(self.context_length, hidden_size)
 
     def forward(self, input_ids):
@@ -206,7 +206,7 @@ class TransformerBlock(nn.Module):
     
     def __init__(self, config: ModelConfig):
         super(TransformerBlock, self).__init__()
-        self.layer_norm1 = NormLayer(config.input_size, config.norm_eps)
+        self.layer_norm1 = nn.LayerNorm(config.input_size, config.norm_eps)
 
         self.mha = MultiHeadAttention(
             config.input_size, 
@@ -219,7 +219,7 @@ class TransformerBlock(nn.Module):
 
         self.dropout1 = nn.Dropout(config.dropout)
 
-        self.layer_norm2 = NormLayer(config.hidden_size, config.norm_eps)
+        self.layer_norm2 = nn.LayerNorm(config.hidden_size, config.norm_eps)
 
         self.ffn = FeedForwardLayer(config.hidden_size, config.expansion_factor)
 
