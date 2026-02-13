@@ -12,10 +12,13 @@ def generate_text_simple(model, idx, max_new_tokens, context_length):
     """
     for _ in range(max_new_tokens):
         idx_cond = idx[:, -context_length:]
-        logits = model(idx_cond)
+        model.eval()
+        with torch.no_grad():
+            logits = model(idx_cond)
         logits = logits[:, -1, :]
-        next_token = torch.argmax(logits, dim=-1)
-        idx = torch.cat((idx, next_token.unsqueeze(0)), dim=1)
+        probs = torch.softmax(logits, dim=-1)
+        next_token = torch.argmax(probs, dim=-1, keepdim=True)
+        idx = torch.cat((idx, next_token), dim=1)
     return idx
 
 def text_to_token_ids(text, tokenizer):
