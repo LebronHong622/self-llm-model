@@ -33,7 +33,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["model*", "dataset*", "trainer*", "config*"]
+include = ["model*", "dataset*", "trainer*", "config*", "eval*"]
 
 [tool.uv]
 conflicts = [

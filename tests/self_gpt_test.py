@@ -15,7 +15,7 @@ batch.append(torch.tensor(tokenizer.encode(txt2)))
 batch = torch.stack(batch, dim=0)
 
 torch.manual_seed(123)
-config = ModelConfig(vocab_size=50257, hidden_size=768, max_length=1024)
+config = ModelConfig(vocab_size=50257, hidden_size=768, context_length=1024)
 model = SelfGPTModel(config)
 logits = model(batch)
 print(logits.shape)

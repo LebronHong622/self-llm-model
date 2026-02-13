@@ -1,6 +1,5 @@
 # llm训练数据加载模块
 from datasets import load_dataset
-from transformers import AutoTokenizer
 from torch.utils.data import Dataset
 import torch
 
