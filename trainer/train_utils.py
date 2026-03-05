@@ -5,10 +5,22 @@
 # @Description: 训练工具函数
 from torch.utils.data import DataLoader, Dataset
 import torch
+import tiktoken
+from dataset.llm_dataset import PretrainedDataset
 
 # dataloader加载数据公共函数
-def create_dataloader(dataset: Dataset, batch_size: int, num_workers: int = 0, shuffle: bool = True, drop_last: bool = True):
-    dataloader = DataLoader(dataset, batch_size=batch_size, num_workers=num_workers, shuffle=shuffle, drop_last=drop_last)
+def create_dataloader(txt, batch_size, max_length, stride,
+                         shuffle=True, drop_last=True, num_workers=0):
+    # Initialize the tokenizer
+    tokenizer = tiktoken.get_encoding("gpt2")
+
+    # Create dataset
+    dataset = PretrainedDataset(txt, tokenizer, max_length, stride)
+
+    # Create dataloader
+    dataloader = DataLoader(
+        dataset, batch_size=batch_size, shuffle=shuffle, drop_last=drop_last, num_workers=num_workers)
+
     return dataloader
 
 def calc_batch_loss(input_batch, target_batch, model, device):
