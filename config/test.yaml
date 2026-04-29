@@ -1,9 +1,6 @@
 # config/test.yaml - 测试环境配置
 model:
-  hidden_size: 128        # 测试用最小模型
-  num_layers: 2
-  num_heads: 2
-  max_length: 64
+  context_length: 256        # 测试用最小模型
 
 training:
   batch_size: 4
@@ -14,3 +11,6 @@ training:
 
 logging:
   level: "DEBUG"
+
+data:
+  max_seq_length: 256

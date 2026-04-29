@@ -1,6 +1,6 @@
 # config/base.yaml - 通用基础配置
 model:
-  vocab_size: 10000
+  vocab_size: 50257
   hidden_size: 768
   num_layers: 12
   num_heads: 12
