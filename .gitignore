@@ -149,3 +149,13 @@ cython_debug/
 
 # dataset
 /dataset/*.jsonl
+/dataset/sms_spam_collection/
+/dataset/sms_spam_collection.zip
+/dataset/fine-tune/
+/dataset/train.csv
+/dataset/validation.csv
+/dataset/test.csv
+/dataset/the-verdict.txt
+
+# gpt2 pretrained weights
+/model/gpt2/

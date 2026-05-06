@@ -60,7 +60,7 @@ class InputEmbeddingLayer(nn.Module):
             IndexError: 如果 seq_len 超过 max_length。
         """
         output = self.embedding(input_ids) \
-            + self.position_embedding(torch.arange(0, input_ids.size(1)))
+            + self.position_embedding(torch.arange(0, input_ids.size(1), device=input_ids.device))
         return output
 
 class MultiHeadAttention(nn.Module):

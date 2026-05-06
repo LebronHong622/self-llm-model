@@ -288,6 +288,7 @@ class TrainingConfig(BaseModel):
     device: Literal["cuda", "cpu"] = Field(default="cuda", description="训练设备")
     save_interval: int = Field(default=1000, ge=1, description="保存间隔步数")
     log_interval: int = Field(default=100, ge=1, description="日志间隔步数")
+    load_pretrained: bool = Field(default=True, description="是否加载 GPT-2 预训练权重")
 
 
 class DataConfig(BaseModel):
@@ -295,6 +296,18 @@ class DataConfig(BaseModel):
     dataset_path: str = Field(default="dataset/pretrain_hq.jsonl", description="数据集路径")
     tokenizer_path: str = Field(default="tokenizer", description="分词器路径")
     max_seq_length: int = Field(default=512, ge=16, le=32768, description="最大序列长度")
+
+
+class EvalConfig(BaseModel):
+    """评估/推理配置"""
+    max_new_tokens: int = Field(default=20, ge=1, le=4096, description="最大生成长度")
+    device: Literal["cuda", "cpu"] = Field(default="cpu", description="推理设备")
+    load_pretrained: bool = Field(default=True, description="是否加载 GPT-2 预训练权重")
+    gpt2_model_size: str = Field(default="124M", description="GPT-2 模型规格")
+    gpt2_model_dir: str = Field(default="model/gpt2", description="GPT-2 权重目录")
+    prompt: str = Field(default="Every effort moves you", description="默认输入文本")
+    temperature: float = Field(default=0.0, ge=0.0, le=5.0, description="采样温度 (0=greedy)")
+    top_k: Optional[int] = Field(default=None, ge=1, description="Top-K 采样 (None=不限制)")
 
 
 class LoggingConfig(BaseModel):
@@ -312,6 +325,7 @@ class Config(BaseModel):
     training: TrainingConfig = Field(default_factory=TrainingConfig, description="训练配置")
     data: DataConfig = Field(default_factory=DataConfig, description="数据配置")
     logging: LoggingConfig = Field(default_factory=LoggingConfig, description="日志配置")
+    eval: EvalConfig = Field(default_factory=EvalConfig, description="评估/推理配置")
     environment: str = Field(default="dev", description="环境名称")
 
     @field_validator("environment")
@@ -396,6 +410,7 @@ class Config(BaseModel):
             training=TrainingConfig(**data.get("training", {})),
             data=DataConfig(**data.get("data", {})),
             logging=LoggingConfig(**data.get("logging", {})),
+            eval=EvalConfig(**data.get("eval", {})),
             environment=data.get("environment", "dev")
         )
 

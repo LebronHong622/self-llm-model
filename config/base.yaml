@@ -1,11 +1,14 @@
-# config/base.yaml - 通用基础配置
+# config/base.yaml - 通用基础配置（GPT-2 124M 对齐）
 model:
   vocab_size: 50257
   hidden_size: 768
   num_layers: 12
   num_heads: 12
-  max_length: 512
+  context_length: 1024        # 与 GPT-2 一致
   dropout: 0.1
+  qwk_bias: true              # GPT-2 attention 层有 bias
+  norm_eps: 1e-5              # GPT-2 默认 epsilon
+  expansion_factor: 4         # FFN 扩展因子 4x (768 -> 3072)
 
 training:
   batch_size: 32
@@ -15,6 +18,7 @@ training:
   device: "cuda"
   save_interval: 1000
   log_interval: 100
+  load_pretrained: true       # 是否加载 GPT-2 预训练权重
 
 data:
   dataset_path: "dataset/pretrain_hq.jsonl"
@@ -24,3 +28,11 @@ data:
 logging:
   level: "INFO"
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+eval:
+  max_new_tokens: 20           # 最大生成长度
+  device: "cpu"                # 推理设备
+  load_pretrained: true         # 是否加载 GPT-2 预训练权重
+  gpt2_model_size: "124M"       # GPT-2 模型规格
+  gpt2_model_dir: "model/gpt2" # GPT-2 权重缓存目录
+  prompt: "Every effort moves you"  # 默认输入提示词

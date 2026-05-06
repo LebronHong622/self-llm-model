@@ -58,6 +58,16 @@ def train():
     model = SelfGPTModel(config.model)
     model.to(device)
 
+    # 6.5 加载 GPT-2 预训练权重
+    if config.training.load_pretrained:
+        from model.gpt_download import download_and_load_gpt2
+        from model.load_gpt2_weights import load_gpt2_weights
+
+        settings, params = download_and_load_gpt2("124M", "model/gpt2")
+        load_gpt2_weights(model, params, config.model)
+    else:
+        print("[train] 使用随机初始化权重")
+
     # 7. 计算训练集损失
     train_loss = calc_loss_loader(train_loader, model, device)
 
