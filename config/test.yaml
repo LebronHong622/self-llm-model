@@ -3,7 +3,7 @@ model:
   context_length: 1024       # 与 GPT-2 一致，支持预训练权重加载
 
 training:
-  batch_size: 4
+  batch_size: 8
   num_epochs: 1
   device: "cpu"
   save_interval: 10
