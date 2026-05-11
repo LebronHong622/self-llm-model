@@ -308,6 +308,55 @@ def save_training_curves(
     print(f"[save_training_curves] 准确率曲线已保存: {acc_path}")
 
 
+def save_classification_model(
+    model: SelfGPTModel,
+    config,
+    device: torch.device,
+    num_classes: int = 2,
+    save_dir: str = "model/fine-tune/classfication",
+) -> str:
+    """
+    将训练完成的分类模型保存到指定目录。
+
+    保存内容 (单个 .pt 文件):
+        - model_state_dict: 模型全部参数（含替换后的分类头）
+        - config_dict:      完整配置（config.model_dump()）
+        - num_classes:      类别数
+        - label_map:        标签映射 {0: "ham", 1: "spam"}
+
+    Args:
+        model:       训练完成后的分类模型
+        config:      配置对象
+        device:      当前设备（用于日志）
+        num_classes: 分类类别数
+        save_dir:    保存目录
+
+    Returns:
+        保存文件的绝对路径
+    """
+    import os
+
+    os.makedirs(save_dir, exist_ok=True)
+
+    label_map = {0: "ham (not spam)", 1: "spam"}
+
+    checkpoint = {
+        "model_state_dict": model.state_dict(),
+        "config_dict": config.model_dump(),
+        "num_classes": num_classes,
+        "label_map": label_map,
+    }
+
+    save_path = os.path.join(save_dir, "classification_model.pth")
+    torch.save(checkpoint, save_path)
+
+    print(f"\n[save_classification_model] 模型已保存: {save_path}")
+    print(f"  设备: {device}")
+    print(f"  类别数: {num_classes}, 标签映射: {label_map}")
+
+    return os.path.abspath(save_path)
+
+
 def train_classification(
     environment: Environment = Environment.TEST,
     max_length: int | None = None,
@@ -383,6 +432,15 @@ def train_classification(
     print(f"  验证集准确率:   {final_val_acc:.4f} ({final_val_acc*100:.2f}%)")
     print(f"  测试集准确率:   {final_test_acc:.4f} ({final_test_acc*100:.2f}%)")
     print("=" * 55)
+
+    # ---- Step 8: 保存训练完成的模型 ----
+    save_classification_model(
+        model=model,
+        config=config,
+        device=device,
+        num_classes=num_classes,
+        save_dir="model/fine-tune/classfication",
+    )
 
     return history, model, device, config
 

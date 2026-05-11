@@ -159,3 +159,7 @@ cython_debug/
 
 # gpt2 pretrained weights
 /model/gpt2/
+
+# fine-tune model checkpoints & training outputs
+/model/fine-tune/
+/output/
