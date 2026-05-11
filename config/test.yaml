@@ -4,10 +4,11 @@ model:
 
 training:
   batch_size: 8
-  num_epochs: 1
-  device: "cpu"
+  num_epochs: 5
+  device: "cuda"
   save_interval: 10
   log_interval: 5
+  learning_rate: 0.00001
 
 logging:
   level: "DEBUG"

@@ -289,6 +289,7 @@ class TrainingConfig(BaseModel):
     save_interval: int = Field(default=1000, ge=1, description="保存间隔步数")
     log_interval: int = Field(default=100, ge=1, description="日志间隔步数")
     load_pretrained: bool = Field(default=True, description="是否加载 GPT-2 预训练权重")
+    weight_decay: float = Field(default=0.1, ge=0.0, le=1.0, description="权重衰减系数")
 
 
 class DataConfig(BaseModel):

@@ -176,107 +176,151 @@ def train_model(
     val_loader: DataLoader,
     config,
     device: torch.device,
-    num_epochs: int | None = None,
-):
+) -> dict:
     """
-    执行分类微调训练循环。
+    执行分类微调训练循环（增强版）。
 
-    每个 epoch 包含:
-        - Train 阶段: 前向传播 -> 取最后一个 token logits -> CE Loss -> 反向传播
-        - Val 阶段:   前向传播 -> 计算 accuracy
+    变更点:
+        1. num_epochs 从 config.training.num_epochs 获取
+        2. 每个 epoch 结束后分别计算 train/val 的 loss 和 accuracy
+        3. 返回 history 字典供绘图和后续分析
 
     Args:
         model:        已准备好的分类模型（输出头为 2 类，参数已冻结）
         train_loader: 训练集 DataLoader
         val_loader:   验证集 DataLoader
-        config:       配置对象
-        device:       计算设备
-        num_epochs:   训练轮数，None 时使用 config.training.num_epochs
+        config:       配置对象（读取 training.num_epochs / training.learning_rate）
+        device:       从 config.training.device 获取的计算设备
+
+    Returns:
+        history: 包含 train_losses, val_losses, train_accs, val_accs 的字典
     """
-    epochs = num_epochs or config.training.num_epochs
-
-    # 损失函数：交叉熵（二分类）
-    criterion = nn.CrossEntropyLoss()
-
-    # 优化器：仅传入可训练参数
-    optimizer = torch.optim.AdamW(
-        filter(lambda p: p.requires_grad, model.parameters()),
-        lr=config.training.learning_rate,
+    from trainer.train_utils import (
+        calc_classification_loss_loader,
+        calc_classification_accuracy_loader,
     )
 
-    print(f"=== 开始训练 ({epochs} epochs) ===")
+    num_epochs = config.training.num_epochs
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.AdamW(
+        model.parameters(),
+        lr=config.training.learning_rate,
+        weight_decay=config.training.weight_decay,
+    )
+
+    history = {
+        "train_losses": [],
+        "val_losses": [],
+        "train_accs": [],
+        "val_accs": [],
+    }
+
+    print(f"=== 开始训练 ({num_epochs} epochs) ===")
     print(f"  优化器参数量: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(1, num_epochs + 1):
         # ---- Train Phase ----
         model.train()
-        train_loss_sum = 0.0
-        train_correct = 0
-        train_total = 0
-
-        for batch_idx, (input_ids, labels) in enumerate(train_loader):
+        for input_ids, labels in train_loader:
             input_ids = input_ids.to(device)
             labels = labels.to(device)
 
-            # 前向传播
-            logits = model(input_ids)               # [B, seq_len, 2]
-            cls_logits = logits[:, -1, :]           # [B, 2] 取最后一个 token 位置
+            logits = model(input_ids)
+            cls_logits = logits[:, -1, :]
             loss = criterion(cls_logits, labels)
 
-            # 反向传播
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
 
-            # 统计
-            train_loss_sum += loss.item() * input_ids.size(0)
-            preds = cls_logits.argmax(dim=-1)
-            train_correct += (preds == labels).sum().item()
-            train_total += input_ids.size(0)
+        # ---- Epoch 级别指标计算 ----
+        train_loss = calc_classification_loss_loader(train_loader, model, device)
+        train_acc = calc_classification_accuracy_loader(train_loader, model, device)
+        val_loss = calc_classification_loss_loader(val_loader, model, device)
+        val_acc = calc_classification_accuracy_loader(val_loader, model, device)
 
-        train_loss = train_loss_sum / train_total
-        train_acc = train_correct / train_total
-
-        # ---- Val Phase ----
-        model.eval()
-        val_correct = 0
-        val_total = 0
-
-        with torch.no_grad():
-            for input_ids, labels in val_loader:
-                input_ids = input_ids.to(device)
-                labels = labels.to(device)
-
-                logits = model(input_ids)
-                cls_logits = logits[:, -1, :]
-                preds = cls_logits.argmax(dim=-1)
-
-                val_correct += (preds == labels).sum().item()
-                val_total += input_ids.size(0)
-
-        val_acc = val_correct / val_total
+        history["train_losses"].append(train_loss)
+        history["val_losses"].append(val_loss)
+        history["train_accs"].append(train_acc)
+        history["val_accs"].append(val_acc)
 
         print(
-            f"Epoch {epoch}/{epochs} | "
-            f"[Train] Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
-            f"[Val] Acc: {val_acc:.4f}"
+            f"Epoch {epoch}/{num_epochs} | "
+            f"Train Loss: {train_loss:.4f} Acc: {train_acc:.4f} | "
+            f"Val Loss: {val_loss:.4f} Acc: {val_acc:.4f}"
         )
 
-    print("训练完成")
+    print("训练完成\n")
+    return history
+
+
+def save_training_curves(
+    history: dict,
+    save_dir: str = "output",
+    prefix: str = "classification",
+):
+    """
+    绘制训练过程曲线并保存为 PNG。
+
+    Args:
+        history:   训练历史字典，包含:
+                     - train_losses: List[float]
+                     - val_losses:   List[float]
+                     - train_accs:   List[float]
+                     - val_accs:     List[float]
+        save_dir:  图片保存目录
+        prefix:    文件名前缀
+    """
+    import os
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    os.makedirs(save_dir, exist_ok=True)
+    epochs_range = range(1, len(history["train_losses"]) + 1)
+
+    # ---- 图 1: 损失曲线 ----
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs_range, history["train_losses"], marker="o", label="Train Loss")
+    plt.plot(epochs_range, history["val_losses"], marker="s", label="Val Loss")
+    plt.title("Training & Validation Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    loss_path = os.path.join(save_dir, f"{prefix}_loss_curve.png")
+    plt.savefig(loss_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[save_training_curves] 损失曲线已保存: {loss_path}")
+
+    # ---- 图 2: 准确率曲线 ----
+    plt.figure(figsize=(10, 5))
+    plt.plot(epochs_range, history["train_accs"], marker="o", label="Train Acc")
+    plt.plot(epochs_range, history["val_accs"], marker="s", label="Val Acc")
+    plt.title("Training & Validation Accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    acc_path = os.path.join(save_dir, f"{prefix}_acc_curve.png")
+    plt.savefig(acc_path, dpi=150, bbox_inches="tight")
+    plt.close()
+    print(f"[save_training_curves] 准确率曲线已保存: {acc_path}")
 
 
 def train_classification(
     environment: Environment = Environment.TEST,
     max_length: int | None = None,
     num_classes: int = 2,
-):
+) -> tuple:
     """
-    分类微调训练入口：数据加载 -> 模型加载与调整 -> 整合训练 -> 返回全部组件。
+    分类微调训练入口（增强版）。
 
-    流程:
-        1. create_classification_dataloaders()  — 加载 train / val / test 数据
-        2. setup_classification_model()         — 初始化模型 + 替换输出头(2类) + 冻结参数
-        3. train_model()                        — 执行训练循环
+    新增功能:
+        1. 训练轮数从 config.training.num_epochs 读取
+        2. 每个 epoch 记录 train/val loss + accuracy
+        3. 自动绘制并保存 loss/accuracy 曲线图
+        4. 最终输出 train / val / test 三集准确率
 
     Args:
         environment:  环境配置（TEST / DEV / PROD）
@@ -284,14 +328,15 @@ def train_classification(
         num_classes:  分类类别数，默认 2 (ham / spam)
 
     Returns:
-        (train_loader, val_loader, test_loader, model, device, config)
+        (history, model, device, config)
     """
+    from trainer.train_utils import calc_classification_accuracy_loader
+
     # ---- Step 1: 加载配置 ----
     config = get_config(environment)
 
     # ---- Step 2: 数据集加载 ----
     import tiktoken
-
     tokenizer = tiktoken.get_encoding("gpt2")
     train_loader, val_loader, test_loader = create_classification_dataloaders(
         tokenizer=tokenizer,
@@ -305,7 +350,7 @@ def train_classification(
         inputs, labels = next(iter(loader))
         print(f"[{name}] input_ids: {inputs.shape}, labels: {labels.shape}")
 
-    # ---- Step 3: 模型加载与调整 ----
+    # ---- Step 3: 模型加载与调整（device 从 config 获取）----
     device = torch.device(config.training.device)
     model = setup_classification_model(
         config=config,
@@ -313,8 +358,8 @@ def train_classification(
         num_classes=num_classes,
     )
 
-    # ---- Step 4: 整合训练 ----
-    train_model(
+    # ---- Step 4: 训练（返回 history，num_epochs 从 config 获取）----
+    history = train_model(
         model=model,
         train_loader=train_loader,
         val_loader=val_loader,
@@ -322,28 +367,27 @@ def train_classification(
         device=device,
     )
 
-    return train_loader, val_loader, test_loader, model, device, config
+    # ---- Step 5: 绘制曲线 ----
+    save_training_curves(history, save_dir="output", prefix="classification")
+
+    # ---- Step 6: 最终评估 ----
+    final_train_acc = calc_classification_accuracy_loader(train_loader, model, device)
+    final_val_acc = calc_classification_accuracy_loader(val_loader, model, device)
+    final_test_acc = calc_classification_accuracy_loader(test_loader, model, device)
+
+    # ---- Step 7: 打印最终结果 ----
+    print("\n" + "=" * 55)
+    print("分类微调训练完成 — 最终结果")
+    print("=" * 55)
+    print(f"  训练集准确率:   {final_train_acc:.4f} ({final_train_acc*100:.2f}%)")
+    print(f"  验证集准确率:   {final_val_acc:.4f} ({final_val_acc*100:.2f}%)")
+    print(f"  测试集准确率:   {final_test_acc:.4f} ({final_test_acc*100:.2f}%)")
+    print("=" * 55)
+
+    return history, model, device, config
 
 
 if __name__ == "__main__":
-    # 完整流程测试：数据加载 -> 模型适配 -> 训练 -> 前向验证
-    train_loader, val_loader, test_loader, model, device, config = train_classification(
-        max_length=64,
+    history, model, device, config = train_classification(
         num_classes=2,
     )
-
-    # 前向传播验证：取一个 batch 跑一遍模型
-    model.eval()
-    with torch.no_grad():
-        sample_inputs, sample_labels = next(iter(train_loader))
-        sample_inputs = sample_inputs.to(device)
-        outputs = model(sample_inputs)
-        cls_logits = outputs[:, -1, :]
-
-        print("\n" + "=" * 50)
-        print("前向传播测试通过")
-        print(f"  输入:          {sample_inputs.shape}")
-        print(f"  输出 logits:   {outputs.shape}")
-        print(f"  分类 logits:   {cls_logits.shape} (取最后 token)")
-        print(f"  标签:          {sample_labels.shape}")
-        print("=" * 50)
