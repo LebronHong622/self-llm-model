@@ -198,7 +198,6 @@ if __name__ == "__main__":
                     f"!= inputs[{j+1}]={input_ids[i,j+1].item()}"
                 )
     print("[OK] labels 是 input_ids 右移 1 位")
-    print("[OK] labels 是 input_ids 右移 1 位")
 
     # 验证 2: labels 中 padding 区域 ignore_index 处理正确
     IGNORE = -100
