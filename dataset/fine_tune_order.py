@@ -90,9 +90,77 @@ class OrderInstructionDataset(Dataset):
             return ALPACA_TEMPLATE_NO_INPUT.format(**sample)
 
 
+
+# ==================== Collate Function ====================
+
+def instruction_collate_fn(
+    batch: list[torch.Tensor],
+    *,
+    pad_token_id: int = 50256,
+    ignore_index: int = -100,
+    max_length: int | None = None,
+    device: str | torch.device = "cpu",
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """指令微调数据的批处理函数。
+
+    处理流程（参照《从零构建大模型》批次组织方式）：
+
+    1. 每条序列末尾追加一个 ``pad_token_id`` 作为结束标记
+    2. 填充至 ``batch_max_length = max(len(item)+1)``
+    3. 从填充后的完整序列中切分：``inputs = padded[:-1]``, ``labels = padded[1:]``
+    4. labels 中除首个 ``pad_token_id`` 外，其余替换为 ``ignore_index``
+    5. 可选截断至 ``max_length``
+
+    Args:
+        batch:         一个 batch 的样本列表，每个元素为 1-D torch.Tensor (变长)
+        pad_token_id:  填充 / 结束 token 的 id
+        ignore_index:  labels 中需忽略的值（默认 -100）
+        max_length:    序列最大允许长度；None 表示不限制
+        device:        输出张量所在设备
+
+    Returns:
+        (input_ids, labels) 各 shape 为 [B, L] 的 LongTensor
+    """
+    # 计算批次最大长度（每条序列 +1 个  padding）
+    batch_max_length = max(len(item) + 1 for item in batch)
+
+    inputs_lst, labels_lst = [], []
+
+    for item in batch:
+        new_item = item.tolist()
+        # 末尾追加  作为结束标记
+        new_item += [pad_token_id]
+        # 填充至批次最大长度
+        padded = new_item + [pad_token_id] * (batch_max_length - len(new_item))
+        # 切分：inputs 去最后一个 token，labels 右移一位
+        inputs = torch.tensor(padded[:-1], dtype=torch.long)
+        labels = torch.tensor(padded[1:], dtype=torch.long)
+
+        # labels 中 padding 位置处理：首个 pad 保留，其余 → ignore_index
+        mask = labels == pad_token_id
+        indices = torch.nonzero(mask).squeeze()
+        if indices.numel() > 1:
+            labels[indices[1:]] = ignore_index
+
+        # 可选截断
+        if max_length is not None:
+            inputs = inputs[:max_length]
+            labels = labels[:max_length]
+
+        inputs_lst.append(inputs)
+        labels_lst.append(labels)
+
+    # 堆叠并转移到目标设备
+    input_ids = torch.stack(inputs_lst).to(device)
+    labels = torch.stack(labels_lst).to(device)
+
+    return input_ids, labels
+
+
 # ==================== 测试代码 ====================
 if __name__ == "__main__":
     import tiktoken
+    from torch.utils.data import DataLoader
 
     tokenizer = tiktoken.get_encoding("gpt2")
     dataset = OrderInstructionDataset(data_path=DEFAULT_DATA_PATH, tokenizer=tokenizer)
@@ -106,3 +174,47 @@ if __name__ == "__main__":
     sample = dataset[0]
     print(f"\nSample[0] shape: {sample.shape}")
     print(f"Sample[0] (前10 tokens): {sample[:10].tolist()}")
+
+    # ========== collate_fn 验证 ==========
+    PAD = 50256
+    loader = DataLoader(
+        dataset, batch_size=4, shuffle=True,
+        collate_fn=lambda b: instruction_collate_fn(b, max_length=512),
+    )
+    input_ids, labels = next(iter(loader))
+
+    print(f"\n--- collate_fn 输出 ---")
+    print(f"input_ids shape: {input_ids.shape}")   # [B, L]
+    print(f"labels shape:   {labels.shape}")       # [B, L]
+
+    # 验证 1: 每行内部 labels 确实是 inputs 右移 1 位（在 ignore_index 替换前一致）
+    IGNORE = -100
+    for i in range(input_ids.shape[0]):
+        L = input_ids.shape[1]
+        for j in range(L - 1):
+            if labels[i, j].item() != IGNORE:
+                assert labels[i, j].item() == input_ids[i, j + 1].item(), (
+                    f"sample[{i}] pos {j}: labels[{j}]={labels[i,j].item()} "
+                    f"!= inputs[{j+1}]={input_ids[i,j+1].item()}"
+                )
+    print("[OK] labels 是 input_ids 右移 1 位")
+    print("[OK] labels 是 input_ids 右移 1 位")
+
+    # 验证 2: labels 中 padding 区域 ignore_index 处理正确
+    IGNORE = -100
+    for i in range(labels.shape[0]):
+        found_first_pad = False
+        for j in range(labels.shape[1]):
+            val = labels[i, j].item()
+            if val == PAD:
+                if found_first_pad:
+                    raise AssertionError(
+                        f"sample[{i}] pos {j}: 非首个 pad 应为 -100"
+                    )
+                found_first_pad = True
+            elif val == IGNORE:
+                if not found_first_pad:
+                    raise AssertionError(
+                        f"sample[{i}] pos {j}: 首个 pad 前不应出现 -100"
+                    )
+    print("[OK] labels 中 padding 区域 ignore_index 处理正确")
